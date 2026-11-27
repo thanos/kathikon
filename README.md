@@ -11,6 +11,55 @@ Jobs are treated as durable obligations that must eventually be fulfilled: compl
 
 Kathikon uses **Mnesia** as its coordination store and **OTP** as its execution substrate. No PostgreSQL, Redis, RabbitMQ, or external brokers are required.
 
+## Features
+
+### Core queue
+
+1. **Durable jobs in Mnesia.** Jobs are stored in Mnesia, so no PostgreSQL, Redis, or broker is needed.
+2. **Explicit job state machine.** There are 11 states: `scheduled`, `available`, `claimed`, `running`, `waiting_for_children`, `retryable`, `completed`, `failed`, `dead`, `discarded`, and `cancelled`.
+3. **Workers.** `use Kathikon.Worker` with `perform/1`. Return values are `:ok`, `{:ok, value}`, `{:sleep, seconds}`, `{:discard, reason}`, `{:retry, reason}`, and `{:error, reason}`.
+4. **Queues and concurrency.** Each queue has its own concurrency and one dispatcher. You can pause and resume a single queue or all queues.
+5. **Priority and retries.** Jobs have a `priority` and a `max_attempts` limit.
+6. **Cancel.** Pending jobs can be cancelled with `Kathikon.cancel/1`.
+7. **Durable history.** Each job keeps an audit trail of state transitions.
+8. **Dead-letter queue.** Failed jobs can be listed, rerun, retried, or discarded (`rerun/2`, `retry_dead/2`, `discard_dead/2`).
+9. **Job uniqueness (v0.5.0).** `unique:` on a worker or on `insert/3` coalesces duplicates. The `criteria:` function picks the key, and `on_conflict: :error` can reject duplicates instead. Coalescing emits telemetry, and a warning is logged when the existing job has already completed.
+
+### Bulk and workflows
+
+10. **Bulk insert.** `insert_many/2` writes chunks with partial success and per-index errors.
+11. **Streaming batches.** `Kathikon.Batch.open/2`, `append/2`, and `close/1` add children incrementally without holding every spec in memory.
+12. **Parent/child batches.** Fan-out and fan-in workflows, with batch telemetry.
+
+### Scheduling
+
+13. **One-time and recurring schedules.** `Kathikon.schedule/3` accepts `at:`, `in:`, or `cron:`.
+14. **Cron.** Standard 5-field expressions with timezone support, and schedules can be updated.
+15. **Scheduler adapters.** A built-in scheduler, plus an optional Quantum adapter.
+16. **Promoter.** Moves due scheduled jobs to `available`.
+
+### Retention and storage
+
+17. **Pruner.** Deletes old `completed`, `cancelled`, and `discarded` jobs after `retention_period`. It also clears unique index rows for old `failed` and `dead` jobs, which it never deletes.
+18. **Storage behaviour.** Mnesia is the default. Optional callbacks cover bulk writes (`insert_jobs/2`), unique inserts (`insert_unique/2`), and paginated listing (`list_jobs_page/1`).
+
+### Operations and observability
+
+19. **Dashboard facade.** `Kathikon.Dashboard` gives queue summaries, job lists, and bulk control for UIs and RPC.
+20. **Remote ops.** `Kathikon.Dashboard.RPC` makes whitelisted calls over Erlang distribution.
+21. **CLI.** `mix kathikon.ops` provides `summary`, `jobs`, `show`, `pause`, `resume`, `cancel`, `retry`, `rerun`, `purge`, and `prune`.
+22. **Phoenix LiveDashboard page.** `Kathikon.LiveDashboard.Page` covers queue health, pause and resume, cancel, filter, search, retry, and paginated lists.
+23. **Reporting.** `Kathikon.Report` provides queue and job summaries.
+24. **Telemetry.** Events are under `[:kathikon, ...]`, with a default logger you can attach.
+25. **Examples and a livebook.** Runnable scripts in `examples/` and an interactive demo in `livebooks/`.
+
+### Not built yet
+
+- **Lifeline.** `Kathikon.Lifeline` is a placeholder that returns `{:error, :not_implemented}`.
+- **Leases and distributed coordination.** Planned for v0.7.0.
+- **Ecto backend.** Planned for v0.6.0.
+- **Later:** MongoDB, SQS, workflows/DAGs, dynamic queues, rate limits, and a stable API.
+
 ## Status
 
 **v0.5.0 - Job uniqueness**
